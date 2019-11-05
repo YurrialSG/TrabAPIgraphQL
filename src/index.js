@@ -41,6 +41,7 @@ const typeDefs = gql`
 
     type Mutation {
         createUser(data: CreateUserInput): User
+        updateUser(id: ID! data: UpdateUserInput): User
         deleteUser(id: ID!): Boolean
     }
 
@@ -49,6 +50,13 @@ const typeDefs = gql`
         email: String!
         password: String!
         role: RoleEnum!
+    }
+
+    input UpdateUserInput {
+        name: String
+        email: String
+        password: String
+        role: RoleEnum
     }
 
 `
@@ -71,6 +79,19 @@ const resolver = {
                 onCreatedUser: reloadedUser
             })
             return reloadedUser
+        },
+        async updateUser(oarent, body, context, info) {
+            if(body.data.password) {
+                body.data.password = await bcrypt.hash(body.data.password, 10)
+            }
+            const user = await User.findOne({
+                where: { id: body.id }
+            })
+            if(!user) {
+                throw new Error('Usuário não encontrado')
+            }
+            const updateUser = await user.update(body.data)
+            return updateUser
         },
         async deleteUser(parent, body, context, info) {
             const user = await User.findOne({
