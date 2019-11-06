@@ -45,6 +45,8 @@ const typeDefs = gql`
         deleteUser(id: ID!): Boolean
 
         createRegistered_time(data: CreateRegistered_timeInput): Registered_time
+        updateRegistered_time(id: ID! data: UpdateRegistered_timeInput): Registered_time
+        deleteRegistered_time(id: ID!): Boolean
     }
 
     input CreateUserInput {
@@ -62,8 +64,12 @@ const typeDefs = gql`
     }
 
     input CreateRegistered_timeInput {
-        time_registered: String
+        time_registered: String!
         user: CreateUserInput
+    }
+
+    input UpdateRegistered_timeInput {
+        time_registered: String
     }
 
 `
@@ -120,6 +126,23 @@ const resolver = {
             } else {
                 return User.create(body.data, { include: [Registered_time] })
             }
+        },
+        async updateRegistered_time(parent, body, context, info) {
+            const registered_time = await Registered_time.findOne({
+                where: { id: body.id }
+            })
+            if(!registered_time) {
+                throw new Error('Registro não encontrado')
+            }
+            const updatedRegistered_time = await registered_time.update(body.data)
+            return updatedRegistered_time
+        },
+        async deleteRegistered_time(parent, body, context, info) {
+            const registered_time = await Registered_time.findOne({
+                where: { id: body.id }
+            })
+            await registered_time.destroy()
+            return true
         }
     }
 }
