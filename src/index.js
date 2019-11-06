@@ -30,8 +30,8 @@ const typeDefs = gql`
 
     type Registered_time {
         id: ID!
-        time_registered: String
-        user: [User]
+        time_registered: String!
+        user: User!
     }
 
     type Query {
@@ -43,6 +43,8 @@ const typeDefs = gql`
         createUser(data: CreateUserInput): User
         updateUser(id: ID! data: UpdateUserInput): User
         deleteUser(id: ID!): Boolean
+
+        createRegistered_time(data: CreateRegistered_timeInput): Registered_time
     }
 
     input CreateUserInput {
@@ -59,6 +61,11 @@ const typeDefs = gql`
         role: RoleEnum
     }
 
+    input CreateRegistered_timeInput {
+        time_registered: String
+        user: CreateUserInput
+    }
+
 `
 
 const resolver = {
@@ -71,6 +78,7 @@ const resolver = {
         }
     },
     Mutation: {
+        //gerenciar user +++++++++++++++++++++++++++++++++++++++++++++++++++++
         async createUser(parent, body, context, info) {
             body.data.password = await bcrypt.hash(body.data.password, 10)
             const user = await User.create(body.data)
@@ -99,6 +107,19 @@ const resolver = {
             })
             await user.destroy()
             return true
+        },
+        //gerenciar registered_time ++++++++++++++++++++++++++++++++++++++++++
+        async createRegistered_time(parent, body, context, info) {
+            if(body.data.user) {
+                const [createdUser, created] =
+                    await User.findOrCreate({ where: body.data.user })
+            body.data.user = null
+            const registered_time = await Registered_time.create(body.data)
+            await registered_time.setUser(createdUser.get('id'))
+            return registered_time.reload({ include: [User] })
+            } else {
+                return User.create(body.data, { include: [Registered_time] })
+            }
         }
     }
 }
