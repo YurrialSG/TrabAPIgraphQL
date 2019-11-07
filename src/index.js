@@ -47,6 +47,16 @@ const typeDefs = gql`
         createRegistered_time(data: CreateRegistered_timeInput): Registered_time
         updateRegistered_time(id: ID! data: UpdateRegistered_timeInput): Registered_time
         deleteRegistered_time(id: ID!): Boolean
+
+        signin(
+            email: String!
+            password: String!
+        ): PayloadAuth
+    }
+
+    type PayloadAuth {
+        token: String!
+        user: User!
     }
 
     input CreateUserInput {
@@ -84,7 +94,7 @@ const resolver = {
         }
     },
     Mutation: {
-        //gerenciar user +++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //gerenciar user
         async createUser(parent, body, context, info) {
             body.data.password = await bcrypt.hash(body.data.password, 10)
             const user = await User.create(body.data)
@@ -114,7 +124,7 @@ const resolver = {
             await user.destroy()
             return true
         },
-        //gerenciar registered_time ++++++++++++++++++++++++++++++++++++++++++
+        //gerenciar registered_time
         async createRegistered_time(parent, body, context, info) {
             if(body.data.user) {
                 const [createdUser, created] =
@@ -143,6 +153,25 @@ const resolver = {
             })
             await registered_time.destroy()
             return true
+        },
+        //fazer login de user
+        async signin(parent, body, context, info) {
+            const user = await User.findOne({
+                where: { email: body.email }
+            })
+            
+            if(user) {
+                const isCorrect = await bcrypt.compare(body.password, user.password)
+                if(!isCorrect) {
+                    throw new Error('Senha inválida')
+                }
+                const token = jwt.sign({ id: user.id }, 'secret')
+                
+                return {
+                    token,
+                    user
+                }
+            }
         }
     }
 }
