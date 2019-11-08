@@ -59,7 +59,7 @@ const typeDefs = gql`
     }
 
     type Subscription {
-        onStatusUser: User
+        onCreateUser: User!
     }
 
     input CreateUserInput {
@@ -91,9 +91,6 @@ const resolver = {
     Query: {
         allUsers() {
             const findUser = User.findAll({ include: [Registered_time] })
-            pubSub.publish('statusUser', {
-                onStatusUser: findUser
-            })
             return findUser
         },
         allRegistered_times() {
@@ -106,6 +103,9 @@ const resolver = {
             body.data.password = await bcrypt.hash(body.data.password, 10)
             const user = await User.create(body.data)
             const reloadedUser = user.reload({ include: [Registered_time] })
+            pubSub.publish('createUser', {
+                onCreateUser: reloadedUser
+            })
             return reloadedUser
         },
         async updateUser(oarent, body, context, info) {
@@ -185,8 +185,8 @@ const resolver = {
         }
     },
     Subscription: {
-        onStatusUser: {
-            subscribe: () => pubSub.asyncIterator('statusUser')
+        onCreateUser: {
+            subscribe: () => pubSub.asyncIterator('createUser')
         }
     }
 }
@@ -197,11 +197,7 @@ const server = new ApolloServer({
     schemaDirectives: {
         auth: AuthDirective
     },
-    context({ req }) {
-        return {
-            headers: req.headers
-        }
-    }
+    context: ({ req, res }) => ({req, res})
 });
 
 
