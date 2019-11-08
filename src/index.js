@@ -9,10 +9,9 @@ const AuthDirective = require('./directives/auth')
 const pubSub = new PubSub()
 
 const typeDefs = gql`
-
     enum RoleEnum {
-        ADMIN
-        USER
+        ADMINISTRADOR
+        PROFISSIONAL
     }
 
     directive @auth(
@@ -35,7 +34,7 @@ const typeDefs = gql`
     }
 
     type Query {
-        allUsers: [User]
+        allUsers: [User] @auth(role: ADMINISTRADOR)
         allRegistered_times: [Registered_time]
     }
 
@@ -44,7 +43,7 @@ const typeDefs = gql`
         updateUser(id: ID! data: UpdateUserInput): User
         deleteUser(id: ID!): Boolean
 
-        createRegistered_time(data: CreateRegistered_timeInput): Registered_time
+        createRegistered_time(data: CreateRegistered_timeInput): Registered_time @auth(role: PROFISSIONAL)
         updateRegistered_time(id: ID! data: UpdateRegistered_timeInput): Registered_time
         deleteRegistered_time(id: ID!): Boolean
 
@@ -57,6 +56,10 @@ const typeDefs = gql`
     type PayloadAuth {
         token: String!
         user: User!
+    }
+
+    type Subscription {
+        onStatusUser: User
     }
 
     input CreateUserInput {
@@ -87,7 +90,11 @@ const typeDefs = gql`
 const resolver = {
     Query: {
         allUsers() {
-            return User.findAll({ include: [Registered_time] })
+            const findUser = User.findAll({ include: [Registered_time] })
+            pubSub.publish('statusUser', {
+                onStatusUser: findUser
+            })
+            return findUser
         },
         allRegistered_times() {
             return Registered_time.findAll({ include: [User] })
@@ -99,9 +106,6 @@ const resolver = {
             body.data.password = await bcrypt.hash(body.data.password, 10)
             const user = await User.create(body.data)
             const reloadedUser = user.reload({ include: [Registered_time] })
-            pubSub.publish('createdUser', {
-                onCreatedUser: reloadedUser
-            })
             return reloadedUser
         },
         async updateUser(oarent, body, context, info) {
@@ -121,6 +125,9 @@ const resolver = {
             const user = await User.findOne({
                 where: { id: body.id }
             })
+            if(!user) {
+                throw new Error('Usuário não encontrado')
+            }
             await user.destroy()
             return true
         },
@@ -151,6 +158,9 @@ const resolver = {
             const registered_time = await Registered_time.findOne({
                 where: { id: body.id }
             })
+            if(!registered_time) {
+                throw new Error('Registro não encontrado')
+            }
             await registered_time.destroy()
             return true
         },
@@ -172,6 +182,11 @@ const resolver = {
                     user
                 }
             }
+        }
+    },
+    Subscription: {
+        onStatusUser: {
+            subscribe: () => pubSub.asyncIterator('statusUser')
         }
     }
 }
