@@ -34,7 +34,7 @@ const typeDefs = gql`
     }
 
     type Query {
-        allUsers: [User]
+        allUsers: [User] @auth(role: ADMINISTRADOR)
         allRegistered_times: [Registered_time]
     }
 
@@ -43,7 +43,7 @@ const typeDefs = gql`
         updateUser(id: ID! data: UpdateUserInput): User
         deleteUser(id: ID!): Boolean
 
-        createRegistered_time(data: CreateRegistered_timeInput): Registered_time
+        createRegistered_time(data: CreateRegistered_timeInput): Registered_time @auth(role: PROFISSIONAL)
         updateRegistered_time(id: ID! data: UpdateRegistered_timeInput): Registered_time
         deleteRegistered_time(id: ID!): Boolean
 
