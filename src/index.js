@@ -35,7 +35,7 @@ const typeDefs = gql`
 
     type Query {
         allUsers: [User] @auth(role: ADMINISTRADOR)
-        allRegistered_times: [Registered_time]
+        allRegistered_times(id: ID): [Registered_time]
     }
 
     type Mutation {
@@ -59,7 +59,7 @@ const typeDefs = gql`
     }
 
     type Subscription {
-        onCreateUser: User!
+        onCreateRegistereds: Registered_time
     }
 
     input CreateUserInput {
@@ -78,7 +78,11 @@ const typeDefs = gql`
 
     input CreateRegistered_timeInput {
         time_registered: String!
-        user: CreateUserInput
+        user: createTimerUserInput
+    }
+
+    input createTimerUserInput {
+        id: ID!
     }
 
     input UpdateRegistered_timeInput {
@@ -93,7 +97,19 @@ const resolver = {
             const findUser = User.findAll({ include: [Registered_time] })
             return findUser
         },
-        allRegistered_times() {
+        async allRegistered_times(parent, body, context, info) {
+            if(context.userId){
+                if(context.roleId !== 'ADMINISTRADOR'){
+                    const registersID = await Registered_time.findAll({
+                        where: { userId: context.userId },
+                        include: [User]
+                    })
+                    if(!registersID) {
+                        throw new Error('Usuário não encontrado')
+                    }
+                    return registersID
+                }
+            }
             return Registered_time.findAll({ include: [User] })
         }
     },
@@ -103,9 +119,6 @@ const resolver = {
             body.data.password = await bcrypt.hash(body.data.password, 10)
             const user = await User.create(body.data)
             const reloadedUser = user.reload({ include: [Registered_time] })
-            pubSub.publish('createUser', {
-                onCreateUser: reloadedUser
-            })
             return reloadedUser
         },
         async updateUser(oarent, body, context, info) {
@@ -134,14 +147,13 @@ const resolver = {
         //gerenciar registered_time
         async createRegistered_time(parent, body, context, info) {
             if(body.data.user) {
-                const [createdUser, created] =
-                    await User.findOrCreate({ where: body.data.user })
-            body.data.user = null
             const registered_time = await Registered_time.create(body.data)
-            await registered_time.setUser(createdUser.get('id'))
-            return registered_time.reload({ include: [User] })
-            } else {
-                return User.create(body.data, { include: [Registered_time] })
+            await registered_time.setUser(body.data.user.id)
+            const reloadedUser = registered_time.reload({ include: [User] })
+            pubSub.publish('createRegistered', {
+                onCreateRegistereds: reloadedUser
+            })
+            return reloadedUser
             }
         },
         async updateRegistered_time(parent, body, context, info) {
@@ -185,8 +197,8 @@ const resolver = {
         }
     },
     Subscription: {
-        onCreateUser: {
-            subscribe: () => pubSub.asyncIterator('createUser')
+        onCreateRegistereds: {
+            subscribe: () => pubSub.asyncIterator('createRegistered')
         }
     }
 }
@@ -197,7 +209,33 @@ const server = new ApolloServer({
     schemaDirectives: {
         auth: AuthDirective
     },
-    context: ({ req, res }) => ({req, res})
+    //context: ({ req, res }) => ({req, res})
+    async context({ req, connection }) {
+        if (connection) {
+            return connection.context
+        }
+        const token = req.headers.authorization
+        //console.log(token)
+
+        if(token){
+            const jwtData = jwt.decode(token.replace('Bearer ', ''))
+            const { id } = jwtData
+
+            const user = await User.findOne({
+                where: { id }
+            })
+
+            return {
+                headers: req.headers,
+                userId: id,
+                roleId: user.role
+            }
+        }
+
+        return {
+            headers: req.headers,
+        }
+    }
 });
 
 
